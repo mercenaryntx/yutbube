@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using CliWrap;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
-//using Microsoft.Azure.WebJobs.Extensions.SignalRService;
+using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
@@ -29,7 +29,7 @@ namespace YouTubeDownloader
         [FunctionName("Downloader")]
         public static async Task<HttpResponseMessage> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]HttpRequestMessage req,
-            //[SignalR(HubName = "broadcast")]IAsyncCollector<SignalRMessage> signalRMessages,
+            [SignalR(HubName = "broadcast")]IAsyncCollector<SignalRMessage> signalRMessages,
             ILogger log)
         {
             log.Log(LogLevel.Information, "C# HTTP trigger function processed a request.");
@@ -45,17 +45,36 @@ namespace YouTubeDownloader
                     {
                         var worker = new Task(async () =>
                         {
-                            var ci = await DownloadAndConvertVideo(id, log);
-                            var url = await BlobStorageRepository.Upload(id, ci.TempPath);
-                            log.Log(LogLevel.Information, $"Signaling the readiness of {ci.Id}");
-                            //await signalRMessages.AddAsync(new SignalRMessage
-                            //{
-                            //    Target = "notify",
-                            //    Arguments = new object[]
-                            //    {
-                            //        new ResponseData(ci.Id, url)
-                            //    }
-                            //});
+                            var idid = id;
+                            try
+                            {
+                                var ci = await DownloadAndConvertVideo(idid, log);
+                                var url = await BlobStorageRepository.Upload(id, ci.TempPath);
+                                log.Log(LogLevel.Information, $"Signaling the readiness of {ci.Id}");
+                                await signalRMessages.AddAsync(new SignalRMessage
+                                {
+                                    Target = "notify",
+                                    Arguments = new object[]
+                                    {
+                                        new ResponseData(idid, url)
+                                    }
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                log.Log(LogLevel.Error, ex.Message, ex);
+                                await signalRMessages.AddAsync(new SignalRMessage
+                                {
+                                    Target = "notify",
+                                    Arguments = new object[]
+                                    {
+                                        new ResponseData(idid, null)
+                                        {
+                                            Error = ex.Message
+                                        }
+                                    }
+                                });
+                            }
                         }, TaskCreationOptions.LongRunning);
                         worker.Start();
                     }

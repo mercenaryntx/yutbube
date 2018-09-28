@@ -1,30 +1,30 @@
 using System.IO;
+using Newtonsoft.Json;
 
 namespace YouTubeDownloader
 {
     public class ResponseData
     {
+        [JsonProperty("id")]
         public string Id { get; }
+
+        [JsonProperty("url")]
         public string StorageUrl { get; }
-        public bool IsReady { get; }
+
+        [JsonProperty("fileName")]
+        public string FileName { get; }
+
+        [JsonProperty("isReady")]
+        public bool IsReady => !string.IsNullOrEmpty(StorageUrl) || !string.IsNullOrEmpty(Error);
+
+        [JsonProperty("error")]
+        public string Error { get; set; }
 
         public ResponseData(string id, string storageUrl)
         {
             Id = id;
             StorageUrl = storageUrl;
-            IsReady = !string.IsNullOrEmpty(storageUrl);
+            FileName = Path.GetFileName(storageUrl);
         }
     }
-
-    //public class ResponseData
-    //{
-    //    public MemoryStream Content { get; }
-    //    public string FileName { get; }
-
-    //    public ResponseData(MemoryStream content, string fileName)
-    //    {
-    //        Content = content;
-    //        FileName = fileName;
-    //    }
-    //}
 }

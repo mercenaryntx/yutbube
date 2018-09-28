@@ -1,0 +1,21 @@
+<p>
+	<mat-form-field>
+		<input matInput [(ngModel)]="videoId">
+	</mat-form-field>
+
+	<button mat-raised-button color="primary" (click)="send()">Send</button>
+</p>
+
+<p>
+    <mat-list>
+      <h3 mat-subheader>Download links:</h3>
+      <mat-list-item *ngFor="let kvp of videos | keyvalue">
+		<h3>{{kvp.value.id}}</h3>
+		<div>
+			<a href="{{kvp.value.url}}" *ngIf="kvp.value.isReady && !kvp.value.error">Download</a>
+		</div>
+		<div *ngIf="!kvp.value.isReady">Processing...</div>
+		<div *ngIf="kvp.value.error" style="color:red">{{kvp.value.error}}</div>
+      </mat-list-item>
+    </mat-list>
+</p>
