@@ -14,6 +14,7 @@ using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
+using YoutubeExplode.Models;
 using YoutubeExplode.Models.MediaStreams;
 
 namespace YouTubeDownloader
@@ -36,19 +37,19 @@ namespace YouTubeDownloader
 
             try
             {
-                var result = new List<ResponseData>();
+                var result = new List<StorageItem>();
                 var ids = await ParseRequest(req);
                 foreach (var id in ids)
                 {
+                    var video = await YoutubeClient.GetVideoAsync(id);
                     var storageUrl = await BlobStorageRepository.GetTempFileStorageUrl(id);
                     if (storageUrl == null)
                     {
                         var worker = new Task(async () =>
                         {
-                            var idid = id;
                             try
                             {
-                                var ci = await DownloadAndConvertVideo(idid, log);
+                                var ci = await DownloadAndConvertVideo(video, log);
                                 var url = await BlobStorageRepository.Upload(id, ci.TempPath);
                                 log.Log(LogLevel.Information, $"Signaling the readiness of {ci.Id}");
                                 await signalRMessages.AddAsync(new SignalRMessage
@@ -56,7 +57,7 @@ namespace YouTubeDownloader
                                     Target = "notify",
                                     Arguments = new object[]
                                     {
-                                        new ResponseData(idid, url)
+                                        new StorageItem(video, url)
                                     }
                                 });
                             }
@@ -68,7 +69,7 @@ namespace YouTubeDownloader
                                     Target = "notify",
                                     Arguments = new object[]
                                     {
-                                        new ResponseData(idid, null)
+                                        new StorageItem(video, null)
                                         {
                                             Error = ex.Message
                                         }
@@ -78,7 +79,7 @@ namespace YouTubeDownloader
                         }, TaskCreationOptions.LongRunning);
                         worker.Start();
                     }
-                    result.Add(new ResponseData(id, storageUrl));
+                    result.Add(new StorageItem(video, storageUrl));
                 }
 
                 return req.CreateResponse(HttpStatusCode.OK, result);
@@ -95,7 +96,7 @@ namespace YouTubeDownloader
             var param = req.GetQueryNameValuePairs().FirstOrDefault(kvp => kvp.Key == "v");
             var v = param.Value;
             if (string.IsNullOrEmpty(v)) v = await req.Content.ReadAsStringAsync();
-            var result = new List<string>();
+            var result = new HashSet<string>();
             foreach (var p in v.Split(Environment.NewLine, ",", " "))
             {
                 if (!YoutubeClient.ValidatePlaylistId(p))
@@ -105,18 +106,16 @@ namespace YouTubeDownloader
                 }
 
                 var playlist = await YoutubeClient.GetPlaylistAsync(p);
-                result.AddRange(playlist.Videos.Select(video => video.Id));
+                playlist.Videos.ForEach(video => result.Add(video.Id));
             }
             return result;
         }
 
-        private static async Task<ConversionInfo> DownloadAndConvertVideo(string id, ILogger log)
+        private static async Task<ConversionInfo> DownloadAndConvertVideo(Video video, ILogger log)
         {
-            log.Log(LogLevel.Information, $"Working on video [{id}]...");
+            log.Log(LogLevel.Information, $"Working on video [{video.Id}]...");
 
-            // Get video info
-            var video = await YoutubeClient.GetVideoAsync(id);
-            var set = await YoutubeClient.GetVideoMediaStreamInfosAsync(id);
+            var set = await YoutubeClient.GetVideoMediaStreamInfosAsync(video.Id);
             var cleanTitle = $"{video.Title.Replace(Path.GetInvalidFileNameChars(), '_')}.mp3";
             log.Log(LogLevel.Information, $"{video.Title}");
 
@@ -157,7 +156,7 @@ namespace YouTubeDownloader
             log.Log(LogLevel.Information, "Conversion complete.");
             return new ConversionInfo
             {
-                Id = id,
+                Id = video.Id,
                 FileName = cleanTitle,
                 TempPath = outputFilePath,
                 Expiration = DateTime.UtcNow.Add(TimeSpan.FromMinutes(30))

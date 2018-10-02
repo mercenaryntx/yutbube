@@ -1,12 +1,23 @@
+using System;
 using System.IO;
 using Newtonsoft.Json;
+using YoutubeExplode.Models;
 
 namespace YouTubeDownloader
 {
-    public class ResponseData
+    public class StorageItem
     {
         [JsonProperty("id")]
         public string Id { get; }
+
+        [JsonProperty("title")]
+        public string Title { get; }
+
+        [JsonProperty("duration")]
+        public TimeSpan Duration { get; }
+
+        [JsonProperty("thumbnail")]
+        public string Thumbnail { get; }
 
         [JsonProperty("url")]
         public string StorageUrl { get; }
@@ -20,9 +31,12 @@ namespace YouTubeDownloader
         [JsonProperty("error")]
         public string Error { get; set; }
 
-        public ResponseData(string id, string storageUrl)
+        public StorageItem(Video video, string storageUrl)
         {
-            Id = id;
+            Id = video.Id;
+            Title = video.Title;
+            Duration = video.Duration;
+            Thumbnail = video.Thumbnails.LowResUrl;
             StorageUrl = storageUrl;
             FileName = Path.GetFileName(storageUrl);
         }

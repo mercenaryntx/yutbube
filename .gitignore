@@ -328,3 +328,4 @@ ASALocalRun/
 
 # MFractors (Xamarin productivity tool) working folder 
 .mfractor/
+/YouTubeDownloader/ClientApp/src/environments/environment.prod.ts
