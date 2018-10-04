@@ -7,6 +7,7 @@ import { SignalRService } from './signalr.service';
 import { HttpClientModule } from '@angular/common/http';
 import { MatInputModule, MatButtonModule, MatSnackBarModule } from '@angular/material';
 import { MatListModule } from '@angular/material/list';
+import { RouterModule } from '@angular/router';
 
 @NgModule({
   declarations: [
@@ -20,7 +21,12 @@ import { MatListModule } from '@angular/material/list';
     MatInputModule,
     MatButtonModule,
     MatSnackBarModule,
-    MatListModule
+    MatListModule,
+    RouterModule.forRoot(
+      [
+        { path: "", component: AppComponent }
+      ]
+    )
   ],
   providers: [
     SignalRService

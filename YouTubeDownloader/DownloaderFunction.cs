@@ -1,17 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using CliWrap;
 using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
 using YoutubeExplode.Models;
@@ -28,66 +28,49 @@ namespace YouTubeDownloader
         private static readonly string OutputDirectoryPath = Path.Combine(Path.GetTempPath(), "Output");
 
         [FunctionName("Downloader")]
-        public static async Task<HttpResponseMessage> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]HttpRequestMessage req,
+        public static async Task Run(
+            [QueueTrigger("conversion", Connection = "AzureWebJobsStorage")]QueueMessagePayload payload,
             [SignalR(HubName = "broadcast")]IAsyncCollector<SignalRMessage> signalRMessages,
             ILogger log)
         {
-            log.Log(LogLevel.Information, "C# HTTP trigger function processed a request.");
-
+            log.LogInformation("Downloader triggered");
+            var video = payload.Video;
+            ConversionInfo ci = null;
             try
             {
-                var result = new List<StorageItem>();
-                var ids = await ParseRequest(req);
-                foreach (var id in ids)
+                ci = await DownloadAndConvertVideo(video, log);
+                log.LogInformation("Uploading to Blob Storage...");
+                video.StorageUrl = await BlobStorageRepository.Upload(video.Id, ci.TempPath);
+                log.LogInformation($"Signaling the readiness of {ci.Id}");
+                await signalRMessages.AddAsync(new SignalRMessage
                 {
-                    var video = await YoutubeClient.GetVideoAsync(id);
-                    var storageUrl = await BlobStorageRepository.GetTempFileStorageUrl(id);
-                    if (storageUrl == null)
+                    Target = payload.ClientId,
+                    Arguments = new object[]
                     {
-                        var worker = new Task(async () =>
-                        {
-                            try
-                            {
-                                var ci = await DownloadAndConvertVideo(video, log);
-                                var url = await BlobStorageRepository.Upload(id, ci.TempPath);
-                                log.Log(LogLevel.Information, $"Signaling the readiness of {ci.Id}");
-                                await signalRMessages.AddAsync(new SignalRMessage
-                                {
-                                    Target = "notify",
-                                    Arguments = new object[]
-                                    {
-                                        new StorageItem(video, url)
-                                    }
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                log.Log(LogLevel.Error, ex.Message, ex);
-                                await signalRMessages.AddAsync(new SignalRMessage
-                                {
-                                    Target = "notify",
-                                    Arguments = new object[]
-                                    {
-                                        new StorageItem(video, null)
-                                        {
-                                            Error = ex.Message
-                                        }
-                                    }
-                                });
-                            }
-                        }, TaskCreationOptions.LongRunning);
-                        worker.Start();
+                        video
                     }
-                    result.Add(new StorageItem(video, storageUrl));
-                }
-
-                return req.CreateResponse(HttpStatusCode.OK, result);
+                });
             }
             catch (Exception ex)
             {
                 log.Log(LogLevel.Error, ex.Message, ex);
-                return req.CreateResponse(HttpStatusCode.BadRequest, ex);
+                video.Error = ex.Message;
+                await signalRMessages.AddAsync(new SignalRMessage
+                {
+                    Target = payload.ClientId,
+                    Arguments = new object[]
+                    {
+                        video
+                    }
+                });
+            }
+            finally
+            {
+                if (ci != null && File.Exists(ci.TempPath))
+                {
+                    log.LogInformation("Deleting audio temp file...");
+                    File.Delete(ci.TempPath);
+                }
             }
         }
 
@@ -111,19 +94,19 @@ namespace YouTubeDownloader
             return result;
         }
 
-        private static async Task<ConversionInfo> DownloadAndConvertVideo(Video video, ILogger log)
+        private static async Task<ConversionInfo> DownloadAndConvertVideo(StorageItem video, ILogger log)
         {
-            log.Log(LogLevel.Information, $"Working on video [{video.Id}]...");
+            log.LogInformation($"Working on video [{video.Id}]...");
 
             var set = await YoutubeClient.GetVideoMediaStreamInfosAsync(video.Id);
             var cleanTitle = $"{video.Title.Replace(Path.GetInvalidFileNameChars(), '_')}.mp3";
-            log.Log(LogLevel.Information, $"{video.Title}");
+            log.LogInformation($"{video.Title}");
 
             // Get highest bitrate audio-only or highest quality mixed stream
             var streamInfo = GetBestAudioStreamInfo(set);
 
             // Download to temp file
-            log.Log(LogLevel.Information, "Downloading...");
+            log.LogInformation("Downloading...");
             var streamFileExt = streamInfo.Container.GetFileExtension();
             var streamFilePath = Path.Combine(TempDirectoryPath, $"{Guid.NewGuid()}.{streamFileExt}");
             using (var streamFile = new FileStream(streamFilePath, FileMode.Create))
@@ -132,17 +115,17 @@ namespace YouTubeDownloader
             }
 
             // Convert to mp3
-            log.Log(LogLevel.Information, $"Converting... (Ffmpeg path: {FfmpegCli.FilePath})");
+            log.LogInformation("Converting...");
             Directory.CreateDirectory(OutputDirectoryPath);
             var outputFilePath = Path.Combine(OutputDirectoryPath, cleanTitle);
             await FfmpegCli.ExecuteAsync($"-i \"{streamFilePath}\" -q:a 0 -map a \"{outputFilePath}\" -y");
 
             // Delete temp file
-            log.Log(LogLevel.Information, "Deleting temp file #1...");
+            log.LogInformation("Deleting video temp file...");
             File.Delete(streamFilePath);
 
             // Edit mp3 metadata
-            log.Log(LogLevel.Information, "Writing metadata...");
+            log.LogInformation("Writing metadata...");
             var idMatch = Regex.Match(video.Title, @"^(?<artist>.*?)-(?<title>.*?)$");
             var artist = idMatch.Groups["artist"].Value.Trim();
             var title = idMatch.Groups["title"].Value.Trim();
@@ -153,7 +136,7 @@ namespace YouTubeDownloader
                 meta.Save();
             }
 
-            log.Log(LogLevel.Information, "Conversion complete.");
+            log.LogInformation("Conversion complete.");
             return new ConversionInfo
             {
                 Id = video.Id,

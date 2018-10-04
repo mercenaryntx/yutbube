@@ -8,28 +8,32 @@ namespace YouTubeDownloader
     public class StorageItem
     {
         [JsonProperty("id")]
-        public string Id { get; }
+        public string Id { get; set; }
 
         [JsonProperty("title")]
-        public string Title { get; }
+        public string Title { get; set; }
 
         [JsonProperty("duration")]
-        public TimeSpan Duration { get; }
+        public TimeSpan Duration { get; set; }
 
         [JsonProperty("thumbnail")]
-        public string Thumbnail { get; }
+        public string Thumbnail { get; set; }
 
         [JsonProperty("url")]
-        public string StorageUrl { get; }
+        public string StorageUrl { get; set; }
 
         [JsonProperty("fileName")]
-        public string FileName { get; }
+        public string FileName { get; set; }
 
         [JsonProperty("isReady")]
         public bool IsReady => !string.IsNullOrEmpty(StorageUrl) || !string.IsNullOrEmpty(Error);
 
         [JsonProperty("error")]
         public string Error { get; set; }
+
+        public StorageItem()
+        {
+        }
 
         public StorageItem(Video video, string storageUrl)
         {

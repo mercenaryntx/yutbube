@@ -14,7 +14,10 @@
         "default_icon": "yutbube-19.png"
     },
     "permissions": [
-        "tabs", "https://www.youtube.com/*", "background"
+        "tabs",
+        "https://www.youtube.com/*",
+        "background",
+        "http://localhost:4200/"
     ],
     "content_security_policy": "script-src 'self' https://www.youtube.com; object-src 'self' https://www.youtube.com"
 }

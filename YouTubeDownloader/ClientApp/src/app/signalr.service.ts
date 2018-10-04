@@ -7,10 +7,12 @@ import { SignalRConnectionInfo } from "./signalr-connection-info.model";
 import { map } from "rxjs/operators";
 import { Subject } from "rxjs";
 import { environment } from '../environments/environment';
+import { Guid } from "guid-typescript";
 
 @Injectable()
 export class SignalRService {
 
+  private readonly _clientId: Guid = Guid.create();
   private readonly _http: HttpClient;
   private readonly _baseUrl: string = environment.baseUrl;
   private readonly _apiKey: string = environment.apiKey;
@@ -26,7 +28,7 @@ export class SignalRService {
     return this._http.get<SignalRConnectionInfo>(requestUrl);
   }
 
-  init() {
+  init(callback) {
     console.log(`initializing SignalRService...`);
     this.getConnectionInfo().subscribe(info => {
       console.log(`received info for endpoint ${info.url}`);
@@ -41,16 +43,19 @@ export class SignalRService {
 
       this.hubConnection.start().catch(err => console.error(err.toString()));
 
-      this.hubConnection.on('notify', (data: any) => {
+      this.hubConnection.on(this._clientId.toString(), (data: any) => {
         this.messages.next(data);
       });
+      callback();
     });
   }
 
   send(message: string): Observable<void> {
-    let requestUrl = `${this._baseUrl}Downloader/?code=${this._apiKey}&v=${message}`;
+    let requestUrl = `${this._baseUrl}Enqueuer/?code=${this._apiKey}&v=${message}&c=${this._clientId.toString()}`;
+    console.log(`HTTP GET ${requestUrl}`);
     return this._http.get(requestUrl).pipe(map((result: any) => {
       for (var i = 0; i < result.length; i++) {
+        result[i].isEnqueued = true;
         this.messages.next(result[i]);
       }
     }));
