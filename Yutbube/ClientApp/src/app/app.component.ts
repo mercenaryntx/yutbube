@@ -9,8 +9,9 @@ export interface IVideo {
   duration: string;
   thumbnail: string;
   url: string;
-  filename: string;
+  fileName: string;
   isReady: boolean;
+  message: string;
 }
 
 @Component({
@@ -35,9 +36,12 @@ export class AppComponent implements OnInit {
           if (id !== "") this.send(id);
         }
       });
-      this.send(this.route.snapshot.fragment);
+      if (this.route.snapshot.fragment != null && this.route.snapshot.fragment !== "") {
+        this.send(this.route.snapshot.fragment);
+      }
     });
     this.signalRService.messages.subscribe((video: any) => {
+      //console.table(video);
       if (!video.isEnqueued) {
         if (video.error != null) {
           this.snackBar.open(video.error);

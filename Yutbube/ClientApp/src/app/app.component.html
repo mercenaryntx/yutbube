@@ -15,7 +15,7 @@
 		    <h3 matLine><b>{{kvp.value.title}}</b></h3>
         <div matLine>
           <a href="{{kvp.value.url}}" *ngIf="kvp.value.isReady && !kvp.value.error">Download</a>
-          <div *ngIf="!kvp.value.isReady">Processing...</div>
+          <div *ngIf="!kvp.value.isReady">{{kvp.value.message}}</div>
           <div *ngIf="kvp.value.error" style="color:red">{{kvp.value.error}}</div>
         </div>
       </mat-list-item>

@@ -13,7 +13,6 @@ using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
-using YoutubeExplode.Models;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Yutbube
@@ -57,7 +56,7 @@ namespace Yutbube
                         var message = new CloudQueueMessage(JsonConvert.SerializeObject(content));
                         log.LogInformation($"[{id}] Enqueuing message");
                         await QueueClient.GetQueueReference(QueueName).AddMessageAsync(message);
-
+                        storageItem.Message = "Enqueued";
                     }
                     result.Add(storageItem);
                 }).ToArray();

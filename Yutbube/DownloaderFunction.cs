@@ -1,9 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -11,10 +9,8 @@ using CliWrap;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
-using YoutubeExplode.Models;
 using YoutubeExplode.Models.MediaStreams;
 
 namespace Yutbube
@@ -22,89 +18,93 @@ namespace Yutbube
     public static class DownloaderFunction
     {
         private static readonly YoutubeClient YoutubeClient = new YoutubeClient();
-        private static readonly Cli FfmpegCli = new Cli(Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().CodeBase).Replace("file:\\", string.Empty), "ffmpeg.exe"));
+        private static readonly string WorkingDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().CodeBase).Replace("file:\\", string.Empty);
 
         private static readonly string TempDirectoryPath = Path.GetTempPath();
         private static readonly string OutputDirectoryPath = Path.Combine(Path.GetTempPath(), "Output");
 
+        private const string NumberFormat = @"[\d\.]+";
+        private const string TimeFormat = @"[\d\.:]+";
+        private static readonly string SizePart = $@"\s*(?<size>{NumberFormat})kB";
+        private static readonly string TimePart = $@"\s*(?<time>{TimeFormat})";
+        private static readonly string BitratePart = $@"\s*(?<bitrate>{NumberFormat})kbits\/s";
+        private static readonly string SpeedPart = $@"\s*(?<speed>{NumberFormat})x";
+        private static readonly string FfmegStatus = $@"size={SizePart}\s+time={TimePart}\s+bitrate={BitratePart}\s+speed={SpeedPart}";
+
+        private const string PROCESSING = "Processing...";
+        private const string DOWNLOADING = "Downloading...";
+        private const string CONVERTING = "Converting...";
+
         [FunctionName("Downloader")]
         public static async Task Run(
-            [QueueTrigger("conversion", Connection = "AzureWebJobsStorage")]QueueMessagePayload payload,
+            [QueueTrigger("%AzureStorageConversionQueueName%", Connection = "AzureWebJobsStorage")]QueueMessagePayload payload,
             [SignalR(HubName = "broadcast")]IAsyncCollector<SignalRMessage> signalRMessages,
             ILogger log)
         {
             log.LogInformation("Downloader triggered");
             var video = payload.Video;
-            ConversionInfo ci = null;
+            string videoTempPath = null;
+            string audioTempPath = null;
+            int? previousPercentage = null;
             try
             {
-                ci = await DownloadAndConvertVideo(video, log);
-                log.LogInformation("Uploading to Blob Storage...");
-                video.StorageUrl = await BlobStorageRepository.Upload(video.Id, ci.TempPath);
-                log.LogInformation($"Signaling the readiness of {ci.Id}");
-                await signalRMessages.AddAsync(new SignalRMessage
+                video.Message = PROCESSING;
+                signalRMessages.Publish(payload.ClientId, video);
+                var streamInfo = await ProcessVideo(video, log);
+
+                video.Message = DOWNLOADING;
+                signalRMessages.Publish(payload.ClientId, video);
+                videoTempPath = await DownloadVideo(streamInfo, log);
+
+                video.Message = CONVERTING;
+                signalRMessages.Publish(payload.ClientId, video);
+
+                void ProgressNotifier(string s)
                 {
-                    Target = payload.ClientId,
-                    Arguments = new object[]
+                    var m = new Regex(FfmegStatus).Match(s);
+                    if (m.Success && TimeSpan.TryParse(m.Groups["time"].Value, CultureInfo.InvariantCulture, out var time))
                     {
-                        video
+                        var p = (int)Math.Floor(time.TotalMilliseconds * 100 / video.Duration.TotalMilliseconds);
+                        if (previousPercentage == p) return;
+                        video.Message = $"{CONVERTING} ({p}%)";
+                        signalRMessages.Publish(payload.ClientId, video);
+                        previousPercentage = p;
                     }
-                });
+                }
+
+                audioTempPath = await ConvertToAudio(video, videoTempPath, log, ProgressNotifier);
+
+                video.Message = "Storing...";
+                signalRMessages.Publish(payload.ClientId, video);
+                video.StorageUrl = await UploadAudio(video.Id, audioTempPath, log);
             }
             catch (Exception ex)
             {
                 log.Log(LogLevel.Error, ex.Message, ex);
                 video.Error = ex.Message;
-                await signalRMessages.AddAsync(new SignalRMessage
-                {
-                    Target = payload.ClientId,
-                    Arguments = new object[]
-                    {
-                        video
-                    }
-                });
             }
             finally
             {
-                if (ci != null && File.Exists(ci.TempPath))
-                {
-                    log.LogInformation("Deleting audio temp file...");
-                    File.Delete(ci.TempPath);
-                }
+                if (videoTempPath != null && File.Exists(videoTempPath)) File.Delete(videoTempPath);
+                if (audioTempPath != null && File.Exists(audioTempPath)) File.Delete(audioTempPath);
+                video.Message = string.Empty;
+                signalRMessages.Publish(payload.ClientId, video);
             }
         }
 
-        private static async Task<IEnumerable<string>> ParseRequest(HttpRequestMessage req)
-        {
-            var param = req.GetQueryNameValuePairs().FirstOrDefault(kvp => kvp.Key == "v");
-            var v = param.Value;
-            if (string.IsNullOrEmpty(v)) v = await req.Content.ReadAsStringAsync();
-            var result = new HashSet<string>();
-            foreach (var p in v.Split(Environment.NewLine, ",", " "))
-            {
-                if (!YoutubeClient.ValidatePlaylistId(p))
-                {
-                    result.Add(p);
-                    continue;
-                }
-
-                var playlist = await YoutubeClient.GetPlaylistAsync(p);
-                playlist.Videos.ForEach(video => result.Add(video.Id));
-            }
-            return result;
-        }
-
-        private static async Task<ConversionInfo> DownloadAndConvertVideo(StorageItem video, ILogger log)
+        private static async Task<MediaStreamInfo> ProcessVideo(StorageItem video, ILogger log)
         {
             log.LogInformation($"Working on video [{video.Id}]...");
 
             var set = await YoutubeClient.GetVideoMediaStreamInfosAsync(video.Id);
-            var cleanTitle = $"{video.Title.Replace(Path.GetInvalidFileNameChars(), '_')}.mp3";
             log.LogInformation($"{video.Title}");
 
             // Get highest bitrate audio-only or highest quality mixed stream
-            var streamInfo = GetBestAudioStreamInfo(set);
+            return GetBestAudioStreamInfo(set);
+        }
 
+        private static async Task<string> DownloadVideo(MediaStreamInfo streamInfo, ILogger log)
+        {
             // Download to temp file
             log.LogInformation("Downloading...");
             var streamFileExt = streamInfo.Container.GetFileExtension();
@@ -113,37 +113,52 @@ namespace Yutbube
             {
                 await YoutubeClient.DownloadMediaStreamAsync(streamInfo, streamFile);
             }
+            return streamFilePath;
+        }
 
+        private static async Task<string> ConvertToAudio(StorageItem video, string tempPath, ILogger log, Action<string> progress)
+        {
             // Convert to mp3
             log.LogInformation("Converting...");
             Directory.CreateDirectory(OutputDirectoryPath);
-            var outputFilePath = Path.Combine(OutputDirectoryPath, cleanTitle);
-            await FfmpegCli.ExecuteAsync($"-i \"{streamFilePath}\" -q:a 0 -map a \"{outputFilePath}\" -y");
+            var cleanTitle = CleanTitle(video.Title);
+            var mp3Path = Path.Combine(OutputDirectoryPath, cleanTitle);
 
-            // Delete temp file
-            log.LogInformation("Deleting video temp file...");
-            File.Delete(streamFilePath);
+            var result = await new Cli(Path.Combine(WorkingDirectory, "ffmpeg.exe"))
+                .SetArguments($"-i \"{tempPath}\" -q:a 0 -map a \"{mp3Path}\" -y")
+                .EnableStandardErrorValidation(false)
+                .SetStandardOutputCallback(progress)
+                .SetStandardErrorCallback(progress)
+                .ExecuteAsync();
 
-            // Edit mp3 metadata
+            log.LogInformation($"Conversion duration: {result.RunTime} (video duration: {video.Duration})");
+            return mp3Path;
+        }
+
+        private static string CleanTitle(string title)
+        {
+            //TODO
+            return $"{title.Replace(Path.GetInvalidFileNameChars(), '_')}.mp3";
+        }
+
+        private static void WriteId3Tag(StorageItem video, string tempPath, ILogger log)
+        {
             log.LogInformation("Writing metadata...");
             var idMatch = Regex.Match(video.Title, @"^(?<artist>.*?)-(?<title>.*?)$");
             var artist = idMatch.Groups["artist"].Value.Trim();
             var title = idMatch.Groups["title"].Value.Trim();
-            using (var meta = TagLib.File.Create(outputFilePath))
+            using (var meta = TagLib.File.Create(tempPath))
             {
                 meta.Tag.Performers = new[] { artist };
                 meta.Tag.Title = title;
                 meta.Save();
             }
+        }
 
-            log.LogInformation("Conversion complete.");
-            return new ConversionInfo
-            {
-                Id = video.Id,
-                FileName = cleanTitle,
-                TempPath = outputFilePath,
-                Expiration = DateTime.UtcNow.Add(TimeSpan.FromMinutes(30))
-            };
+        private static async Task<string> UploadAudio(string id, string tempPath, ILogger log)
+        {
+            log.LogInformation("Uploading to Blob Storage...");
+            return await BlobStorageRepository.Upload(id, tempPath);
         }
 
         private static MediaStreamInfo GetBestAudioStreamInfo(MediaStreamInfoSet set)

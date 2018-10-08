@@ -23,13 +23,16 @@ namespace Yutbube
         public string StorageUrl { get; set; }
 
         [JsonProperty("fileName")]
-        public string FileName { get; set; }
+        public string FileName => !string.IsNullOrEmpty(StorageUrl) ? Path.GetFileName(StorageUrl) : null;
 
         [JsonProperty("isReady")]
         public bool IsReady => !string.IsNullOrEmpty(StorageUrl) || !string.IsNullOrEmpty(Error);
 
         [JsonProperty("error")]
         public string Error { get; set; }
+
+        [JsonProperty("message")]
+        public string Message { get; set; }
 
         public StorageItem()
         {
@@ -42,7 +45,6 @@ namespace Yutbube
             Duration = video.Duration;
             Thumbnail = video.Thumbnails.LowResUrl;
             StorageUrl = storageUrl;
-            FileName = Path.GetFileName(storageUrl);
         }
     }
 }
