@@ -1,0 +1,23 @@
+{
+    "name": "Yutbube Downloader",
+    "description": "",
+    "version": "1.0",
+    "manifest_version": 2,
+    "background": {
+        "scripts": ["background.js"]
+    },
+    "icons": {
+        "16": "yutbube-16.png",
+        "48": "yutbube-48.png"
+    },
+    "browser_action": {
+        "default_icon": "yutbube-19.png"
+    },
+    "permissions": [
+        "tabs",
+        "https://www.youtube.com/*",
+        "background",
+        "http://localhost:4200/"
+    ],
+    "content_security_policy": "script-src 'self' https://www.youtube.com; object-src 'self' https://www.youtube.com"
+}
