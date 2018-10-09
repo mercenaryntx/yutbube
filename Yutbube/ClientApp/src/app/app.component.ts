@@ -26,6 +26,7 @@ export interface IVideo {
 export class AppComponent implements OnInit {
 
   private readonly _baseUrl: string = environment.baseUrl;
+  private readonly _apiKey: string = environment.apiKey;
   public readonly clientVersion: string = environment.clientVersion;
   functionVersion: string;
   videoId: string;
@@ -51,7 +52,7 @@ export class AppComponent implements OnInit {
       if (this.route.snapshot.fragment != null && this.route.snapshot.fragment !== "") {
         this.send(this.route.snapshot.fragment);
       }
-      this.http.get<string>(`${this._baseUrl}version`).subscribe(res => {
+      this.http.get<string>(`${this._baseUrl}version/?code=${this._apiKey}`).subscribe(res => {
         this.functionVersion = res;
       });
     });
@@ -78,7 +79,7 @@ export class AppComponent implements OnInit {
   }
 
   list() {
-    this.http.get<IVideo[]>(`${this._baseUrl}list`).subscribe(res => {
+    this.http.get<IVideo[]>(`${this._baseUrl}list/?code=${this._apiKey}`).subscribe(res => {
       this.history = res;
     });
   }
