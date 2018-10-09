@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Newtonsoft.Json;
 
 namespace Yutbube
 {
@@ -39,6 +41,41 @@ namespace Yutbube
             var blob = folder.GetBlockBlobReference(Path.GetFileName(tempFilePath));
             await blob.UploadFromFileAsync(tempFilePath);
             return blob.StorageUri.PrimaryUri.ToString();
+        }
+
+        public static async Task<string> Upload<T>(string key, T obj)
+        {
+            var folder = Container.GetDirectoryReference(key);
+            var blob = folder.GetBlockBlobReference("index.json");
+            await blob.UploadTextAsync(JsonConvert.SerializeObject(obj));
+            return blob.StorageUri.PrimaryUri.ToString();
+        }
+
+        public static async Task<StorageItem[]> List()
+        {
+            BlobContinuationToken continuationToken = null;
+            var results = new ConcurrentBag<StorageItem>();
+            do
+            {
+                var response = await Container.ListBlobsSegmentedAsync(continuationToken);
+                continuationToken = response.ContinuationToken;
+                var tasks = response.Results.Select(async item =>
+                {
+                    if (item is CloudBlobDirectory folder)
+                    {
+                        var blob = folder.GetBlockBlobReference("index.json");
+                        if (await blob.ExistsAsync())
+                        {
+                            var json = await blob.DownloadTextAsync();
+                            results.Add(JsonConvert.DeserializeObject<StorageItem>(json));
+                        }
+                    }
+                }).ToArray();
+
+                Task.WaitAll(tasks);
+            }
+            while (continuationToken != null);
+            return results.ToArray();
         }
     }
 }

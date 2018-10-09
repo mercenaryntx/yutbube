@@ -35,7 +35,7 @@ namespace Yutbube
         private const string DOWNLOADING = "Downloading...";
         private const string CONVERTING = "Converting...";
 
-        [FunctionName("Downloader")]
+        [FunctionName("downloader")]
         public static async Task Run(
             [QueueTrigger("%AzureStorageConversionQueueName%", Connection = "AzureWebJobsStorage")]QueueMessagePayload payload,
             [SignalR(HubName = "broadcast")]IAsyncCollector<SignalRMessage> signalRMessages,
@@ -76,7 +76,7 @@ namespace Yutbube
 
                 video.Message = "Storing...";
                 signalRMessages.Publish(payload.ClientId, video);
-                video.StorageUrl = await UploadAudio(video.Id, audioTempPath, log);
+                await UploadAudio(video, audioTempPath, log);
             }
             catch (Exception ex)
             {
@@ -155,10 +155,13 @@ namespace Yutbube
             }
         }
 
-        private static async Task<string> UploadAudio(string id, string tempPath, ILogger log)
+        private static async Task UploadAudio(StorageItem item, string mp3Location, ILogger log)
         {
             log.LogInformation("Uploading to Blob Storage...");
-            return await BlobStorageRepository.Upload(id, tempPath);
+            item.Message = string.Empty;
+            item.ConversionDate = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm");
+            item.StorageUrl = await BlobStorageRepository.Upload(item.Id, mp3Location);
+            await BlobStorageRepository.Upload(item.Id, item);
         }
 
         private static MediaStreamInfo GetBestAudioStreamInfo(MediaStreamInfoSet set)

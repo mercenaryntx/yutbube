@@ -29,7 +29,7 @@ namespace Yutbube
             QueueClient = storageAccount.CreateCloudQueueClient();
         }
 
-        [FunctionName("Enqueuer")]
+        [FunctionName("enqueuer")]
         public static async Task<HttpResponseMessage> Run([HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)]HttpRequestMessage req, ILogger log)
         {
             log.LogInformation("Enqueuer triggered");

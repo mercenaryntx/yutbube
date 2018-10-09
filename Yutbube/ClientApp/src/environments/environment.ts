@@ -5,7 +5,8 @@
 export const environment = {
   production: false,
   baseUrl: "http://localhost:7071/api/",
-  apiKey: ''
+  apiKey: "",
+  clientVersion: "1.0.0"
 };
 
 /*

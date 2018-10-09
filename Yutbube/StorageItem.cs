@@ -34,6 +34,9 @@ namespace Yutbube
         [JsonProperty("message")]
         public string Message { get; set; }
 
+        [JsonProperty("conversionDate")]
+        public string ConversionDate { get; set; }
+
         public StorageItem()
         {
         }

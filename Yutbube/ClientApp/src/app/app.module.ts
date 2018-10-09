@@ -7,7 +7,9 @@ import { SignalRService } from './signalr.service';
 import { HttpClientModule } from '@angular/common/http';
 import { MatInputModule, MatButtonModule, MatSnackBarModule } from '@angular/material';
 import { MatListModule } from '@angular/material/list';
+import { MatTabsModule } from '@angular/material/tabs';
 import { RouterModule } from '@angular/router';
+import { MAT_SNACK_BAR_DEFAULT_OPTIONS } from '@angular/material';
 
 @NgModule({
   declarations: [
@@ -22,6 +24,7 @@ import { RouterModule } from '@angular/router';
     MatButtonModule,
     MatSnackBarModule,
     MatListModule,
+    MatTabsModule,
     RouterModule.forRoot(
       [
         { path: "", component: AppComponent }
@@ -29,7 +32,8 @@ import { RouterModule } from '@angular/router';
     )
   ],
   providers: [
-    SignalRService
+    SignalRService,
+    { provide: MAT_SNACK_BAR_DEFAULT_OPTIONS, useValue: { duration: 2500 } }
   ],
   bootstrap: [AppComponent]
 })

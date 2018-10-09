@@ -51,7 +51,7 @@ export class SignalRService {
   }
 
   send(message: string): Observable<void> {
-    let requestUrl = `${this._baseUrl}Enqueuer/?code=${this._apiKey}&v=${message}&c=${this._clientId.toString()}`;
+    let requestUrl = `${this._baseUrl}enqueuer/?code=${this._apiKey}&v=${message}&c=${this._clientId.toString()}`;
     console.log(`HTTP GET ${requestUrl}`);
     return this._http.get(requestUrl).pipe(map((result: any) => {
       for (var i = 0; i < result.length; i++) {
