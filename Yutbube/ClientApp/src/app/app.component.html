@@ -7,7 +7,7 @@
 </div>
 <br style="clear: both"/>
 
-<mat-tab-group [(selectedIndex)]="selectedIndex" (selectedTabChange)="tabChanged($event)">
+<mat-tab-group (selectedTabChange)="tabChanged($event)">
   <mat-tab label="Queue">
     <p>
       <mat-form-field>
