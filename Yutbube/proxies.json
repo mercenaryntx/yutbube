@@ -8,6 +8,14 @@
             },
             "backendUri": "https://yutbube.blob.core.windows.net/client/index.html"
         },
+        "proxyApi": {
+            "matchCondition": {
+                "methods": [ "GET" ],
+                "route": "/api/{*restOfPath}"
+            },
+            "backendUri": "https://yutbube.azurewebsites.net/api/{restOfPath}"
+        },
+
         "proxyStatic": {
             "matchCondition": {
                 "methods": [ "GET" ],
