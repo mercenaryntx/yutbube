@@ -1,6 +1,4 @@
-using YoutubeExplode.Models;
-
-namespace Yutbube
+namespace Yutbube.Models
 {
     public class QueueMessagePayload
     {

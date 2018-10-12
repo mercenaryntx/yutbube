@@ -12,6 +12,9 @@ using Microsoft.Extensions.Logging;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
 using YoutubeExplode.Models.MediaStreams;
+using Yutbube.Extensions;
+using Yutbube.Models;
+using Yutbube.Repositories;
 
 namespace Yutbube
 {
@@ -73,6 +76,7 @@ namespace Yutbube
                 }
 
                 audioTempPath = await ConvertToAudio(video, videoTempPath, log, ProgressNotifier);
+                WriteId3Tag(video, audioTempPath, log);
 
                 video.Message = "Storing...";
                 signalRMessages.Publish(payload.ClientId, video);
@@ -144,12 +148,15 @@ namespace Yutbube
         private static void WriteId3Tag(StorageItem video, string tempPath, ILogger log)
         {
             log.LogInformation("Writing metadata...");
-            var idMatch = Regex.Match(video.Title, @"^(?<artist>.*?)-(?<title>.*?)$");
-            var artist = idMatch.Groups["artist"].Value.Trim();
-            var title = idMatch.Groups["title"].Value.Trim();
+            var idMatch = Regex.Match(video.Title, @"^(?<artist>.*?)\s+-\s+(?<title>.*?)$");
+            if (!idMatch.Success) return;
+
+            var artist = idMatch.Groups["artist"].Value.TrimSpaces();
+            var title = idMatch.Groups["title"].Value.TrimSpaces();
+
             using (var meta = TagLib.File.Create(tempPath))
             {
-                meta.Tag.Performers = new[] { artist };
+                meta.Tag.Performers = new[] {artist};
                 meta.Tag.Title = title;
                 meta.Save();
             }

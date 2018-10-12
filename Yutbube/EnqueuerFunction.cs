@@ -13,6 +13,9 @@ using Microsoft.WindowsAzure.Storage.Queue;
 using Newtonsoft.Json;
 using Tyrrrz.Extensions;
 using YoutubeExplode;
+using Yutbube.Extensions;
+using Yutbube.Models;
+using Yutbube.Repositories;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Yutbube
@@ -35,10 +38,7 @@ namespace Yutbube
             log.LogInformation("Enqueuer triggered");
 
             var clientId = req.GetQueryNameValuePairs().FirstOrDefault(kvp => kvp.Key == "c").Value;
-            if (string.IsNullOrEmpty(clientId))
-            {
-                return req.CreateErrorResponse(HttpStatusCode.BadRequest, "Client Id is missing");
-            }
+            if (string.IsNullOrEmpty(clientId)) return req.CreateErrorResponse(HttpStatusCode.BadRequest, "Client Id is missing");
 
             try
             {
@@ -72,6 +72,41 @@ namespace Yutbube
             }
         }
 
+        private static async Task<IEnumerable<string>> ParseRequest(HttpRequestMessage req)
+        {
+            var param = req.GetQueryNameValuePairs().FirstOrDefault(kvp => kvp.Key == "v");
+            var v = param.Value;
+            if (string.IsNullOrEmpty(v)) v = await req.Content.ReadAsStringAsync();
+            var result = new HashSet<string>();
+            foreach (var p in v.Split(Environment.NewLine, ",", " "))
+            {
+                var playlistId = GetPlaylistId(p);
+                if (string.IsNullOrEmpty(playlistId))
+                {
+                    var videoId = GetVideoId(p);
+                    if (!string.IsNullOrEmpty(videoId)) result.Add(videoId);
+                }
+                else
+                {
+                    var playlist = await YoutubeClient.GetPlaylistAsync(playlistId);
+                    playlist.Videos.ForEach(video => result.Add(video.Id));
+                }
+            }
+            return result;
+        }
+
+        private static string GetPlaylistId(string input)
+        {
+            if (YoutubeClient.ValidatePlaylistId(input)) return input;
+            return YoutubeClient.TryParsePlaylistId(input, out var playlistId) ? playlistId : null;
+        }
+
+        private static string GetVideoId(string input)
+        {
+            if (YoutubeClient.ValidateVideoId(input)) return input;
+            return YoutubeClient.TryParseVideoId(input, out var videoId) ? videoId : null;
+        }
+
         private static async Task<StorageItem> GetVideo(string id, ILogger log)
         {
             try
@@ -93,26 +128,6 @@ namespace Yutbube
         {
             log.LogInformation($"[{id}] Checking blob storage");
             return BlobStorageRepository.GetTempFileStorageUrl(id);
-        }
-
-        private static async Task<IEnumerable<string>> ParseRequest(HttpRequestMessage req)
-        {
-            var param = req.GetQueryNameValuePairs().FirstOrDefault(kvp => kvp.Key == "v");
-            var v = param.Value;
-            if (string.IsNullOrEmpty(v)) v = await req.Content.ReadAsStringAsync();
-            var result = new HashSet<string>();
-            foreach (var p in v.Split(Environment.NewLine, ",", " "))
-            {
-                if (!YoutubeClient.ValidatePlaylistId(p))
-                {
-                    result.Add(p);
-                    continue;
-                }
-
-                var playlist = await YoutubeClient.GetPlaylistAsync(p);
-                playlist.Videos.ForEach(video => result.Add(video.Id));
-            }
-            return result;
         }
     }
 }

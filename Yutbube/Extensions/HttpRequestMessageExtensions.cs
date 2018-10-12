@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 
-namespace Yutbube
+namespace Yutbube.Extensions
 {
     public static class HttpRequestMessageExtensions
     {

@@ -1,7 +1,6 @@
 using System;
-using Newtonsoft.Json;
 
-namespace Yutbube
+namespace Yutbube.Models
 {
     public  class ConversionInfo
     {

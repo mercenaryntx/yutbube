@@ -39,7 +39,6 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="ClientApp\" />
     <Folder Include="ChromePlugin\" />
   </ItemGroup>
 </Project>

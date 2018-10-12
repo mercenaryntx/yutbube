@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
+using Yutbube.Models;
 
-namespace Yutbube
+namespace Yutbube.Repositories
 {
     public static class BlobStorageRepository
     {

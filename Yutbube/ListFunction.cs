@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using Yutbube.Repositories;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Yutbube

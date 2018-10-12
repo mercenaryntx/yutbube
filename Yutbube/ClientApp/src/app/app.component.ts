@@ -71,7 +71,8 @@ export class AppComponent implements OnInit {
   }
 
   navigate() {
-    this.router.navigateByUrl(`#${this.videoId}`);
+    this.signalRService.send(this.videoId).subscribe(() => { });
+    //this.router.navigateByUrl(`#${this.videoId}`);
   }
 
   send(id) {

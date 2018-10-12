@@ -3,7 +3,7 @@ using System.IO;
 using Newtonsoft.Json;
 using YoutubeExplode.Models;
 
-namespace Yutbube
+namespace Yutbube.Models
 {
     public class StorageItem
     {
