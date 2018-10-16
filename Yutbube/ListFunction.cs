@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using Yutbube.Extensions;
 using Yutbube.Repositories;
-using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Yutbube
 {
@@ -22,7 +22,7 @@ namespace Yutbube
             }
             catch (Exception ex)
             {
-                log.Log(LogLevel.Error, ex.Message, ex);
+                log.LogError(ex, ex.Message.EscapeCurlyBraces());
                 return req.CreateResponse(HttpStatusCode.BadRequest, ex);
             }
         }

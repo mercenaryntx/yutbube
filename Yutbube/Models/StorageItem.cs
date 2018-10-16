@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using YoutubeExplode.Models;
@@ -37,9 +38,18 @@ namespace Yutbube.Models
         [JsonProperty("conversionDate")]
         public string ConversionDate { get; set; }
 
-        public StorageItem()
-        {
-        }
+        [JsonIgnore]
+        public Dictionary<string, string> Properties =>
+            new Dictionary<string, string>
+            {
+                {"Video ID", Id},
+                {"Video title", Title},
+                {"Storage URL", StorageUrl},
+                {"Duration", Duration.ToString()},
+                {"Error", Error}
+            };
+
+        public StorageItem() { }
 
         public StorageItem(Video video, string storageUrl)
         {

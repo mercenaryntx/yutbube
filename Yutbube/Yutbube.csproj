@@ -12,12 +12,16 @@
     <None Remove="ClientApp\node_modules\**" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="proxies.json" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="bin\ffmpeg.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="2.0.1" />
+    <PackageReference Include="Microsoft.ApplicationInsights" Version="2.8.0" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.CosmosDB" Version="3.0.1" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.SignalRService" Version="1.0.0-preview1-10002" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="3.0.0" />
@@ -36,9 +40,6 @@
     <None Update="local.settings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
-    </None>
-    <None Update="proxies.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
   <ItemGroup>
