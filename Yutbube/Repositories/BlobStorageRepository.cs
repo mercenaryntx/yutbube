@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
@@ -36,19 +37,19 @@ namespace Yutbube.Repositories
             return blob?.StorageUri.PrimaryUri.ToString();
         }
 
-        public static async Task<string> Upload(string key, string tempFilePath)
+        public static async Task<string> Upload(string key, string tempFilePath, CancellationToken cancellationToken)
         {
             var folder = Container.GetDirectoryReference(key);
             var blob = folder.GetBlockBlobReference(Path.GetFileName(tempFilePath));
-            await blob.UploadFromFileAsync(tempFilePath);
+            await blob.UploadFromFileAsync(tempFilePath, null, null, null, cancellationToken);
             return blob.StorageUri.PrimaryUri.ToString();
         }
 
-        public static async Task<string> Upload<T>(string key, T obj)
+        public static async Task<string> Upload<T>(string key, T obj, CancellationToken cancellationToken)
         {
             var folder = Container.GetDirectoryReference(key);
             var blob = folder.GetBlockBlobReference("index.json");
-            await blob.UploadTextAsync(JsonConvert.SerializeObject(obj));
+            await blob.UploadTextAsync(JsonConvert.SerializeObject(obj), null, null, null, null, null, cancellationToken);
             return blob.StorageUri.PrimaryUri.ToString();
         }
 

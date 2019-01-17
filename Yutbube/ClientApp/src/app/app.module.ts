@@ -10,6 +10,7 @@ import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { RouterModule } from '@angular/router';
 import { MAT_SNACK_BAR_DEFAULT_OPTIONS } from '@angular/material';
+import { ContextMenuModule } from 'ngx-contextmenu';
 
 @NgModule({
   declarations: [
@@ -25,6 +26,7 @@ import { MAT_SNACK_BAR_DEFAULT_OPTIONS } from '@angular/material';
     MatSnackBarModule,
     MatListModule,
     MatTabsModule,
+    ContextMenuModule.forRoot(),
     RouterModule.forRoot(
       [
         { path: "", component: AppComponent }

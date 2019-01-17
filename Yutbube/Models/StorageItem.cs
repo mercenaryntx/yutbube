@@ -38,6 +38,9 @@ namespace Yutbube.Models
         [JsonProperty("conversionDate")]
         public string ConversionDate { get; set; }
 
+        [JsonProperty("downloaderInvocationId")]
+        public Guid DownloaderInvocationId { get; set; }
+
         [JsonIgnore]
         public Dictionary<string, string> Properties =>
             new Dictionary<string, string>

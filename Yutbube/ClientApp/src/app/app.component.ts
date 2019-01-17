@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, ViewChild, OnInit } from '@angular/core';
 import { SignalRService } from './signalr.service';
 import { MatSnackBar } from '@angular/material';
 import { Router, ActivatedRoute, NavigationEnd } from '@angular/router';
@@ -6,6 +6,7 @@ import { MatTabChangeEvent } from '@angular/material/tabs';
 import { environment } from '../environments/environment';
 import { HttpClient } from "@angular/common/http";
 import * as _ from 'lodash';
+import { ContextMenuComponent } from 'ngx-contextmenu';
 
 export interface IVideo {
   id: string;
@@ -71,7 +72,8 @@ export class AppComponent implements OnInit {
   }
 
   navigate() {
-    this.signalRService.send(this.videoId).subscribe(() => { });
+    this.send(this.videoId);
+    this.videoId = '';
     //this.router.navigateByUrl(`#${this.videoId}`);
   }
 
@@ -84,4 +86,15 @@ export class AppComponent implements OnInit {
       this.history = res;
     });
   }
+
+  retry(video) {
+    this.send(video.id);
+  }
+
+  remove(video) {
+    this.http.post(`${this._baseUrl}terminate/?id=${video.downloaderInvocationId}&code=${this._apiKey}`, null).subscribe();
+    //this.queue.delete(video.id);
+  }
+
+  @ViewChild(ContextMenuComponent) public basicMenu: ContextMenuComponent;
 }

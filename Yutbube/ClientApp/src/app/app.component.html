@@ -18,7 +18,7 @@
       <!--<button mat-raised-button color="primary" (click)="list()">List</button>-->
     </p>    
     <mat-list>
-      <mat-list-item *ngFor="let kvp of queue | keyvalue">
+      <mat-list-item *ngFor="let kvp of queue | keyvalue" [contextMenu]="basicMenu" [contextMenuSubject]="kvp.value">
         <img matListAvatar src="{{kvp.value.thumbnail}}" alt="{{kvp.value.title}}" style="width: 70px; height: 52px; border-radius: 0%">
         <h3 matLine><b>{{kvp.value.title}}</b>
         </h3>
@@ -29,6 +29,14 @@
         </div>
       </mat-list-item>
     </mat-list>
+    <context-menu>
+      <ng-template contextMenuItem let-item (execute)="retry($event.item)">
+          Retry
+      </ng-template>
+      <ng-template contextMenuItem let-item (execute)="remove($event.item)">
+        Remove
+      </ng-template>
+    </context-menu>    
   </mat-tab>
   <mat-tab label="History">
     <mat-list>

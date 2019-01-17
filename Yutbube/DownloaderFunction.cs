@@ -1,11 +1,11 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using CliWrap;
 using CliWrap.Models;
@@ -19,6 +19,7 @@ using Yutbube.Extensions;
 using Yutbube.Models;
 using Yutbube.Repositories;
 using Microsoft.ApplicationInsights;
+using ExecutionContext = Microsoft.Azure.WebJobs.ExecutionContext;
 
 namespace Yutbube
 {
@@ -62,19 +63,34 @@ namespace Yutbube
             }
 
             var video = payload.Video;
+            video.DownloaderInvocationId = context.InvocationId;
+            var cts = new CancellationTokenSource();
             string videoTempPath = null;
             string audioTempPath = null;
             int? previousPercentage = null;
             long? cliDuration = null;
 
-            void Publish(string s)
+            bool Publish(string s)
             {
+                if (Cancellation.Tokens.ContainsKey(video.DownloaderInvocationId))
+                {
+                    video.Error = "Download cancelled";
+                    if (!cts.IsCancellationRequested) cts.Cancel();
+                    return false;
+                }
                 video.Message = s;
                 signalRMessages.Publish(payload.ClientId, video);
+                return true;
             }
 
             void ProgressNotifier(string s)
             {
+                if (Cancellation.Tokens.ContainsKey(video.DownloaderInvocationId))
+                {
+                    cts.Cancel();
+                    return;
+                }
+
                 var m = FfmpegStatus.Match(s);
                 if (m.Success && TimeSpan.TryParse(m.Groups["time"].Value, CultureInfo.InvariantCulture, out var time))
                 {
@@ -87,20 +103,35 @@ namespace Yutbube
 
             try
             {
-                Publish("Processing...");
-                var streamInfo = await ProcessVideo(video, log);
+                MediaStreamInfo streamInfo = null;
+                if (Publish("Processing..."))
+                {
+                    streamInfo = await ProcessVideo(video, log);
+                }
 
-                Publish("Downloading...");
-                videoTempPath = await DownloadVideo(streamInfo, log);
+                if (Publish("Downloading..."))
+                {
+                    videoTempPath = await DownloadVideo(streamInfo, log, cts.Token);
+                }
 
-                Publish(CONVERTING);
-                var result = await ConvertToAudio(video, videoTempPath, log, ProgressNotifier);
-                cliDuration = result.Item1.RunTime.Ticks;
-                audioTempPath = result.Item2;
-                WriteId3Tag(video, audioTempPath, log);
+                if (Publish(CONVERTING))
+                {
+                    var result = await ConvertToAudio(video, videoTempPath, log, ProgressNotifier, cts.Token);
+                    cliDuration = result.Item1.RunTime.Ticks;
+                    audioTempPath = result.Item2;
+                    WriteId3Tag(video, audioTempPath, log);
+                }
 
-                Publish("Storing...");
-                await UploadAudio(video, audioTempPath, log);
+                if (Publish("Storing..."))
+                {
+                    await UploadAudio(video, audioTempPath, log, cts.Token);
+                }
+            }
+            catch (TaskCanceledException ex)
+            {
+                log.LogInformation("Download cancelled");
+                video.Error = ex.Message;
+                TelemetryClient?.TrackException(ex, video.Properties);
             }
             catch (Exception ex)
             {
@@ -110,6 +141,8 @@ namespace Yutbube
             }
             finally
             {
+                Cancellation.Tokens.TryRemove(video.DownloaderInvocationId, out var value);
+                cts.Dispose();
                 if (videoTempPath != null && File.Exists(videoTempPath)) File.Delete(videoTempPath);
                 if (audioTempPath != null && File.Exists(audioTempPath)) File.Delete(audioTempPath);
                 Publish(string.Empty);
@@ -118,7 +151,8 @@ namespace Yutbube
                     {
                         {"Video duration", video.Duration.Ticks},
                         {"Function duration", sw.Elapsed.Ticks},
-                        {"Conversion duration", cliDuration ?? 0}
+                        {"Conversion duration", cliDuration ?? 0},
+                        { "Cancelled", cts.IsCancellationRequested ? 1 : 0 }
                     });
             }
         }
@@ -134,19 +168,19 @@ namespace Yutbube
             return set.GetBestAudioStreamInfo();
         }
 
-        private static async Task<string> DownloadVideo(MediaStreamInfo streamInfo, ILogger log)
+        private static async Task<string> DownloadVideo(MediaStreamInfo streamInfo, ILogger log, CancellationToken cancellationToken)
         {
             log.LogInformation("Downloading...");
             var streamFileExt = streamInfo.Container.GetFileExtension();
             var streamFilePath = Path.Combine(TempDirectoryPath, $"{Guid.NewGuid()}.{streamFileExt}");
             using (var streamFile = new FileStream(streamFilePath, FileMode.Create))
             {
-                await YoutubeClient.DownloadMediaStreamAsync(streamInfo, streamFile);
+                await YoutubeClient.DownloadMediaStreamAsync(streamInfo, streamFile, null, cancellationToken);
             }
             return streamFilePath;
         }
 
-        private static async Task<Tuple<ExecutionResult, string>> ConvertToAudio(StorageItem video, string tempPath, ILogger log, Action<string> progress)
+        private static async Task<Tuple<ExecutionResult, string>> ConvertToAudio(StorageItem video, string tempPath, ILogger log, Action<string> progress, CancellationToken cancellationToken)
         {
             log.LogInformation("Converting...");
             Directory.CreateDirectory(OutputDirectoryPath);
@@ -158,6 +192,7 @@ namespace Yutbube
                 .EnableStandardErrorValidation(false)
                 .SetStandardOutputCallback(progress)
                 .SetStandardErrorCallback(progress)
+                .SetCancellationToken(cancellationToken)
                 .ExecuteAsync();
 
             log.LogInformation($"Conversion duration: {result.RunTime} (video duration: {video.Duration})");
@@ -187,13 +222,13 @@ namespace Yutbube
             }
         }
 
-        private static async Task UploadAudio(StorageItem item, string mp3Location, ILogger log)
+        private static async Task UploadAudio(StorageItem item, string mp3Location, ILogger log, CancellationToken cancellationToken)
         {
             log.LogInformation("Uploading to Blob Storage...");
             item.Message = string.Empty;
             item.ConversionDate = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm");
-            item.StorageUrl = await BlobStorageRepository.Upload(item.Id, mp3Location);
-            await BlobStorageRepository.Upload(item.Id, item);
+            item.StorageUrl = await BlobStorageRepository.Upload(item.Id, mp3Location, cancellationToken);
+            await BlobStorageRepository.Upload(item.Id, item, cancellationToken);
         }
     }
-}
+};
