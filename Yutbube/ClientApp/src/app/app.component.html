@@ -8,7 +8,7 @@
 <br style="clear: both"/>
 
 <mat-tab-group (selectedTabChange)="tabChanged($event)">
-  <mat-tab label="Queue">
+  <mat-tab label="In progress">
     <p>
       <mat-form-field>
         <input matInput [(ngModel)]="videoId">
@@ -38,7 +38,7 @@
       </ng-template>
     </context-menu>    
   </mat-tab>
-  <mat-tab label="History">
+  <mat-tab label="Completed">
     <mat-list>
       <mat-list-item *ngFor="let video of history">
         <img matListAvatar src="{{video.thumbnail}}" alt="{{video.title}}" style="width: 70px; height: 52px; border-radius: 0%">

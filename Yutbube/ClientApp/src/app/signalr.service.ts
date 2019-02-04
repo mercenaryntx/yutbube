@@ -43,7 +43,8 @@ export class SignalRService {
 
       this.hubConnection.start().catch(err => console.error(err.toString()));
 
-      this.hubConnection.on(this._clientId.toString(), (data: any) => {
+      //this._clientId.toString()
+      this.hubConnection.on("inprogress", (data: any) => {
         this.messages.next(data);
       });
       callback();

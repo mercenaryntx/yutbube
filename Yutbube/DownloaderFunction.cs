@@ -79,7 +79,7 @@ namespace Yutbube
                     return false;
                 }
                 video.Message = s;
-                signalRMessages.Publish(payload.ClientId, video);
+                signalRMessages.Publish("inprogress", video); //payload.ClientId
                 return true;
             }
 
