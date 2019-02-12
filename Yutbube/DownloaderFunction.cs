@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,7 +17,7 @@ using YoutubeExplode.Models.MediaStreams;
 using Yutbube.Extensions;
 using Yutbube.Models;
 using Yutbube.Repositories;
-using Microsoft.ApplicationInsights;
+using Yutbube.Conversion;
 using ExecutionContext = Microsoft.Azure.WebJobs.ExecutionContext;
 
 namespace Yutbube
@@ -27,22 +26,8 @@ namespace Yutbube
     {
         private const string CONVERTING = "Converting...";
 
-        private static readonly TelemetryClient TelemetryClient;
         private static readonly YoutubeClient YoutubeClient = new YoutubeClient();
-
-        private static readonly string WorkingDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().CodeBase).Replace("file:\\", string.Empty);
-        private static readonly string TempDirectoryPath = Path.GetTempPath();
-        private static readonly string OutputDirectoryPath = Path.Combine(Path.GetTempPath(), "Output");
-
-        static DownloaderFunction()
-        {
-            var key = Environment.GetEnvironmentVariable("APPINSIGHTS_INSTRUMENTATIONKEY", EnvironmentVariableTarget.Process);
-            if (!string.IsNullOrEmpty(key))
-                TelemetryClient = new TelemetryClient
-                {
-                    InstrumentationKey = key
-                };
-        }
+        private static readonly AppInsightsClient AppInsightsClient = new AppInsightsClient();
 
         [FunctionName("downloader")]
         public static async Task Run(
@@ -55,12 +40,7 @@ namespace Yutbube
             sw.Start();
             log.LogInformation("Downloader triggered");
 
-            if (TelemetryClient != null)
-            {
-                TelemetryClient.Context.Operation.Id = context.InvocationId.ToString();
-                TelemetryClient.Context.Operation.Name = "downloader";
-                TelemetryClient.Context.Session.Id = payload.ClientId;
-            }
+            AppInsightsClient.SetOperation(context.InvocationId.ToString(), "downloader").SetSessionId(payload.ClientId);
 
             var video = payload.Video;
             video.DownloaderInvocationId = context.InvocationId;
@@ -131,13 +111,13 @@ namespace Yutbube
             {
                 log.LogInformation("Download cancelled");
                 video.Error = ex.Message;
-                TelemetryClient?.TrackException(ex, video.Properties);
+                AppInsightsClient.TrackException(ex, video.Properties);
             }
             catch (Exception ex)
             {
                 log.LogError(ex, ex.Message.EscapeCurlyBraces());
                 video.Error = ex.Message;
-                TelemetryClient?.TrackException(ex, video.Properties);
+                AppInsightsClient.TrackException(ex, video.Properties);
             }
             finally
             {
@@ -146,7 +126,7 @@ namespace Yutbube
                 if (videoTempPath != null && File.Exists(videoTempPath)) File.Delete(videoTempPath);
                 if (audioTempPath != null && File.Exists(audioTempPath)) File.Delete(audioTempPath);
                 Publish(string.Empty);
-                TelemetryClient?.TrackEvent("Download", video.Properties,
+                AppInsightsClient.TrackEvent("Download", video.Properties,
                     new Dictionary<string, double>
                     {
                         {"Video duration", video.Duration.Ticks},
@@ -172,7 +152,7 @@ namespace Yutbube
         {
             log.LogInformation("Downloading...");
             var streamFileExt = streamInfo.Container.GetFileExtension();
-            var streamFilePath = Path.Combine(TempDirectoryPath, $"{Guid.NewGuid()}.{streamFileExt}");
+            var streamFilePath = Path.Combine(ConversionConfiguration.TempDirectoryPath, $"{Guid.NewGuid()}.{streamFileExt}");
             using (var streamFile = new FileStream(streamFilePath, FileMode.Create))
             {
                 await YoutubeClient.DownloadMediaStreamAsync(streamInfo, streamFile, null, cancellationToken);
@@ -183,11 +163,11 @@ namespace Yutbube
         private static async Task<Tuple<ExecutionResult, string>> ConvertToAudio(StorageItem video, string tempPath, ILogger log, Action<string> progress, CancellationToken cancellationToken)
         {
             log.LogInformation("Converting...");
-            Directory.CreateDirectory(OutputDirectoryPath);
+            Directory.CreateDirectory(ConversionConfiguration.OutputDirectoryPath);
             var cleanTitle = CleanTitle(video.Title);
-            var mp3Path = Path.Combine(OutputDirectoryPath, cleanTitle);
+            var mp3Path = Path.Combine(ConversionConfiguration.OutputDirectoryPath, cleanTitle);
 
-            var result = await new Cli(Path.Combine(WorkingDirectory, "ffmpeg.exe"))
+            var result = await new Cli(Path.Combine(ConversionConfiguration.WorkingDirectory, "ffmpeg.exe"))
                 .SetArguments($"-i \"{tempPath}\" -q:a 0 -map a \"{mp3Path}\" -y")
                 .EnableStandardErrorValidation(false)
                 .SetStandardOutputCallback(progress)
@@ -201,7 +181,6 @@ namespace Yutbube
 
         private static string CleanTitle(string title)
         {
-            //TODO
             return $"{title.Replace(Path.GetInvalidFileNameChars(), '_')}.mp3";
         }
 
