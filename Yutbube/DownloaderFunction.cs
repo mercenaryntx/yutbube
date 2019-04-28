@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,20 +92,7 @@ namespace Yutbube
 
                 if (Publish("Downloading..."))
                 {
-                    videoTempPath = await DownloadVideo(streamInfo, log, cts.Token);
-                }
-
-                if (Publish(CONVERTING))
-                {
-                    var result = await ConvertToAudio(video, videoTempPath, log, ProgressNotifier, cts.Token);
-                    cliDuration = result.Item1.RunTime.Ticks;
-                    audioTempPath = result.Item2;
-                    WriteId3Tag(video, audioTempPath, log);
-                }
-
-                if (Publish("Storing..."))
-                {
-                    await UploadAudio(video, audioTempPath, log, cts.Token);
+                    videoTempPath = await DownloadVideo(streamInfo, video, log, cts.Token);
                 }
             }
             catch (TaskCanceledException ex)
@@ -123,17 +111,7 @@ namespace Yutbube
             {
                 Cancellation.Tokens.TryRemove(video.DownloaderInvocationId, out var value);
                 cts.Dispose();
-                if (videoTempPath != null && File.Exists(videoTempPath)) File.Delete(videoTempPath);
-                if (audioTempPath != null && File.Exists(audioTempPath)) File.Delete(audioTempPath);
-                Publish(string.Empty);
-                AppInsightsClient.TrackEvent("Download", video.Properties,
-                    new Dictionary<string, double>
-                    {
-                        {"Video duration", video.Duration.Ticks},
-                        {"Function duration", sw.Elapsed.Ticks},
-                        {"Conversion duration", cliDuration ?? 0},
-                        { "Cancelled", cts.IsCancellationRequested ? 1 : 0 }
-                    });
+                Publish("Ready.");
             }
         }
 
@@ -144,15 +122,16 @@ namespace Yutbube
             var set = await YoutubeClient.GetVideoMediaStreamInfosAsync(video.Id);
             log.LogInformation($"{video.Title}");
 
-            // Get highest bitrate audio-only or highest quality mixed stream
-            return set.GetBestAudioStreamInfo();
+            return set.GetAll().OrderByDescending(v => v.Size).First(v => v.Container == Container.Mp4);
         }
 
-        private static async Task<string> DownloadVideo(MediaStreamInfo streamInfo, ILogger log, CancellationToken cancellationToken)
+        private static async Task<string> DownloadVideo(MediaStreamInfo streamInfo, StorageItem video, ILogger log, CancellationToken cancellationToken)
         {
             log.LogInformation("Downloading...");
+            var cleanTitle = CleanTitle(video.Title);
             var streamFileExt = streamInfo.Container.GetFileExtension();
-            var streamFilePath = Path.Combine(ConversionConfiguration.TempDirectoryPath, $"{Guid.NewGuid()}.{streamFileExt}");
+            var streamFilePath = Path.Combine(ConversionConfiguration.TempDirectoryPath, cleanTitle.Replace(".mp3", "." + streamFileExt));
+
             using (var streamFile = new FileStream(streamFilePath, FileMode.Create))
             {
                 await YoutubeClient.DownloadMediaStreamAsync(streamInfo, streamFile, null, cancellationToken);
@@ -181,7 +160,9 @@ namespace Yutbube
 
         private static string CleanTitle(string title)
         {
-            return $"{title.Replace(Path.GetInvalidFileNameChars(), '_')}.mp3";
+            var chars = Regex.Escape(string.Join(string.Empty, Path.GetInvalidFileNameChars()));
+            var r = new Regex($"[{chars}]");
+            return $"{r.Replace(title, "_")}.mp3";
         }
 
         private static void WriteId3Tag(StorageItem video, string tempPath, ILogger log)

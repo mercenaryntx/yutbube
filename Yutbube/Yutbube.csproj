@@ -20,15 +20,15 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="CliWrap" Version="2.2.0" />
-    <PackageReference Include="Microsoft.ApplicationInsights" Version="2.9.0" />
+    <PackageReference Include="CliWrap" Version="2.2.1" />
+    <PackageReference Include="Microsoft.ApplicationInsights" Version="2.10.0-beta3" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.CosmosDB" Version="3.0.3" />
-    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.SignalRService" Version="1.0.0-preview1-10025" />
-    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="3.0.3" />
-    <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="1.0.24" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.SignalRService" Version="1.0.0" />
+    <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.Storage" Version="3.0.5" />
+    <PackageReference Include="Microsoft.NET.Sdk.Functions" Version="1.0.27" />
     <PackageReference Include="taglib-sharp-netstandard2.0" Version="2.1.0" />
-    <PackageReference Include="Tyrrrz.Extensions" Version="1.5.1" />
-    <PackageReference Include="YoutubeExplode" Version="4.6.4" />
+    <PackageReference Include="Tyrrrz.Extensions" Version="1.6.2" />
+    <PackageReference Include="YoutubeExplode" Version="4.7.0-beta" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />

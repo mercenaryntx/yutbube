@@ -88,7 +88,7 @@ namespace Yutbube
                 else
                 {
                     var playlist = await YoutubeClient.GetPlaylistAsync(playlistId);
-                    playlist.Videos.ForEach(video => result.Add(video.Id));
+                    result.AddRange(playlist.Videos.Select(video => video.Id));
                 }
             }
             return result;

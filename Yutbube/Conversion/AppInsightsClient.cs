@@ -21,6 +21,7 @@ namespace Yutbube.Conversion
 
         public AppInsightsClient SetOperation(string id, string name)
         {
+            if (_telemetryClient == null) return this;
             _telemetryClient.Context.Operation.Id = id;
             _telemetryClient.Context.Operation.Name = name;
             return this;
@@ -28,18 +29,21 @@ namespace Yutbube.Conversion
 
         public AppInsightsClient SetSessionId(string id)
         {
+            if (_telemetryClient == null) return this;
             _telemetryClient.Context.Session.Id = id;
             return this;
         }
 
         public AppInsightsClient TrackException(Exception ex, IDictionary<string, string> properties = null)
         {
+            if (_telemetryClient == null) return this;
             _telemetryClient.TrackException(ex, properties);
             return this;
         }
 
         public AppInsightsClient TrackEvent(string eventName, IDictionary<string, string> properties = null, IDictionary<string, double> metrics = null)
         {
+            if (_telemetryClient == null) return this;
             _telemetryClient.TrackEvent(eventName, properties, metrics);
             return this;
         }
