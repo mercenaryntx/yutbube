@@ -94,6 +94,19 @@ namespace Yutbube
                 {
                     videoTempPath = await DownloadVideo(streamInfo, video, log, cts.Token);
                 }
+
+                if (Publish(CONVERTING))
+                {
+                    var result = await ConvertToAudio(video, videoTempPath, log, ProgressNotifier, cts.Token);
+                    cliDuration = result.Item1.RunTime.Ticks;
+                    audioTempPath = result.Item2;
+                    WriteId3Tag(video, audioTempPath, log);
+                }
+
+                if (Publish("Storing..."))
+                {
+                    await UploadAudio(video, audioTempPath, log, cts.Token);
+                }
             }
             catch (TaskCanceledException ex)
             {
@@ -111,7 +124,17 @@ namespace Yutbube
             {
                 Cancellation.Tokens.TryRemove(video.DownloaderInvocationId, out var value);
                 cts.Dispose();
-                Publish("Ready.");
+                if (videoTempPath != null && File.Exists(videoTempPath)) File.Delete(videoTempPath);
+                if (audioTempPath != null && File.Exists(audioTempPath)) File.Delete(audioTempPath);
+                Publish(string.Empty);
+                AppInsightsClient.TrackEvent("Download", video.Properties,
+                    new Dictionary<string, double>
+                    {
+                        {"Video duration", video.Duration.Ticks},
+                        {"Function duration", sw.Elapsed.Ticks},
+                        {"Conversion duration", cliDuration ?? 0},
+                        { "Cancelled", cts.IsCancellationRequested ? 1 : 0 }
+                    });
             }
         }
 
@@ -122,7 +145,8 @@ namespace Yutbube
             var set = await YoutubeClient.GetVideoMediaStreamInfosAsync(video.Id);
             log.LogInformation($"{video.Title}");
 
-            return set.GetAll().OrderByDescending(v => v.Size).First(v => v.Container == Container.Mp4);
+            //return set.GetAll().OrderByDescending(v => v.Size).First(v => v.Container == Container.Mp4);
+            return set.GetBestAudioStreamInfo();
         }
 
         private static async Task<string> DownloadVideo(MediaStreamInfo streamInfo, StorageItem video, ILogger log, CancellationToken cancellationToken)
