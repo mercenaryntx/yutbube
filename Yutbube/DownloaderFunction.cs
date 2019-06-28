@@ -11,6 +11,7 @@ using CliWrap.Models;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.SignalRService;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using YoutubeExplode;
 using YoutubeExplode.Models.MediaStreams;
 using Yutbube.Extensions;
@@ -30,7 +31,7 @@ namespace Yutbube
 
         [FunctionName("downloader")]
         public static async Task Run(
-            [QueueTrigger("%AzureStorageConversionQueueName%", Connection = "AzureWebJobsStorage")]QueueMessagePayload payload,
+            [QueueTrigger("%AzureStorageConversionQueueName%", Connection = "AzureWebJobsStorage")]string message,
             [SignalR(HubName = "broadcast")]IAsyncCollector<SignalRMessage> signalRMessages,
             ExecutionContext context,
             ILogger log)
@@ -38,6 +39,8 @@ namespace Yutbube
             var sw = new Stopwatch();
             sw.Start();
             log.LogInformation("Downloader triggered");
+
+            var payload = JsonConvert.DeserializeObject<QueueMessagePayload>(message);
 
             AppInsightsClient.SetOperation(context.InvocationId.ToString(), "downloader").SetSessionId(payload.ClientId);
 
