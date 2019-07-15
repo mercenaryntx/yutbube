@@ -20,7 +20,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="CliWrap" Version="2.3.0" />
+    <PackageReference Include="CliWrap" Version="2.3.1" />
     <PackageReference Include="Microsoft.ApplicationInsights" Version="2.10.0" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.CosmosDB" Version="3.0.3" />
     <PackageReference Include="Microsoft.Azure.WebJobs.Extensions.SignalRService" Version="1.0.0" />
@@ -29,7 +29,7 @@
     <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
     <PackageReference Include="taglib-sharp-netstandard2.0" Version="2.1.0" />
     <PackageReference Include="Tyrrrz.Extensions" Version="1.6.2" />
-    <PackageReference Include="YoutubeExplode" Version="4.7.5" />
+    <PackageReference Include="YoutubeExplode" Version="4.7.6" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
